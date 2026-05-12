@@ -3,12 +3,15 @@ import random
 import string
 import time
 from datetime import datetime, timedelta
+import eventlet
+eventlet.monkey_patch()
+
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cross-device-toolbox-secret')
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', ping_timeout=60, ping_interval=25, max_http_buffer_size=1e8, logger=False, engineio_logger=False)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', ping_timeout=60, ping_interval=25, max_http_buffer_size=1e8, logger=False, engineio_logger=False)
 
 # 内存数据
 online_devices = {}
@@ -512,5 +515,5 @@ def handle_remote_control(data):
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    print(f'[SERVER] Starting on port {port}')
-    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+    print('[SERVER] Starting on port', port)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)

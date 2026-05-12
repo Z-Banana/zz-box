@@ -1,6 +1,6 @@
 // ==================== 全局状态 ====================
 const socket = io({
-    transports: ['polling'],
+    transports: ['polling', 'websocket'],
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
@@ -34,26 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('已连接服务器', 'success');
         updateConnStatus(true);
         socket.emit('register', {device_id: deviceId, nickname: nickname});
-        // 重连后自动重新加入房间
-        for (const [type, code] of Object.entries(currentRooms)) {
-            if (code) socket.emit('join_room_socket', {room_code: code});
-        }
     });
 
-    socket.on('disconnect', (reason) => {
-        updateConnStatus(false);
-        console.log('[SOCKET] 断开原因:', reason);
-    });
-    socket.on('reconnect', (attemptNumber) => {
-        showToast('已重新连接', 'success');
-        updateConnStatus(true);
-    });
-    socket.on('reconnect_attempt', (attemptNumber) => {
-        console.log('[SOCKET] 重连尝试 #' + attemptNumber);
-    });
-    socket.on('reconnect_error', (error) => {
-        console.log('[SOCKET] 重连失败:', error);
-    });
+    socket.on('disconnect', () => updateConnStatus(false));
     socket.on('registered', (data) => {
         document.getElementById('onlineCount').textContent = data.online_count;
     });
@@ -126,17 +109,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     socket.on('random_result', (data) => {
-        if (currentRooms.random === data.room_code && data.mode === 'group') {
+        if (currentRooms.random === data.room_code) {
             document.getElementById('randomResult').textContent = data.result;
             showToast(`${data.picker || '某人'} 抽中了: ${data.result}`, 'info');
         }
     });
 
-    setInterval(() => { if (socket.connected) socket.emit('heartbeat', {device_id: deviceId}); }, 8000);
+    setInterval(() => { if (socket.connected) socket.emit('heartbeat', {device_id: deviceId}); }, 15000);
     fetchDevices();
-    setInterval(fetchDevices, 10000);
+    setInterval(fetchDevices, 15000);
     loadRelayInbox();
-    setInterval(loadRelayInbox, 10000);
+    setInterval(loadRelayInbox, 15000);
 
     handleUrlParams();
 });

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>跨设备实用工具箱</title>
 <link rel="stylesheet" href="/static/css/style.css">
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
@@ -25,6 +26,7 @@
         <div class="nav-card" data-tab="share"><span class="icon">🔗</span>网站分享</div>
         <div class="nav-card" data-tab="clipboard"><span class="icon">📋</span>剪贴板</div>
         <div class="nav-card" data-tab="remote"><span class="icon">🎮</span>手机遥控</div>
+        <div class="nav-card" data-tab="clock"><span class="icon">⏱️</span>共享计时</div>
         <div class="nav-card" data-tab="bill"><span class="icon">💰</span>AA账单</div>
         <div class="nav-card" data-tab="dice"><span class="icon">🎲</span>同步掷骰</div>
         <div class="nav-card" data-tab="vote"><span class="icon">📊</span>匿名投票</div>
@@ -230,6 +232,49 @@
                     </div>
                     <button class="btn btn-sm btn-secondary w-full mt-3" onclick="leaveRoom('remote')">断开连接</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. 共享计时器（去掉闹钟） -->
+    <div class="card" id="tab-clock">
+        <div class="card-title">⏱️ 共享计时器</div>
+        <div class="room-bar" id="clockRoomBar" style="display:none">
+            <div><span style="font-size:0.8rem;opacity:0.9">房间</span><span class="room-code" id="clockRoomCode"></span></div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="openInvite()">邀请</button>
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="leaveRoom('clock')">退出</button>
+            </div>
+        </div>
+        <div id="clockJoinPanel">
+            <p style="color:var(--gray-500);margin-bottom:16px">创建一个房间，多人同步倒计时</p>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="createRoom('clock')">➕ 创建房间</button>
+                <button class="btn btn-secondary" onclick="showJoinInput('clock')">🔗 加入房间</button>
+            </div>
+            <div id="clockJoinInput" style="display:none;margin-top:12px">
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="clockRoomInput" placeholder="6位房间码" maxlength="6" style="text-transform:uppercase;flex:1">
+                    <button class="btn btn-primary" onclick="joinRoom('clock')">加入</button>
+                    <button class="btn btn-secondary" onclick="openScanModal('clock')">📷 扫码</button>
+                </div>
+            </div>
+        </div>
+        <div id="clockPanel" style="display:none">
+            <div class="timer-circle" id="timerCircle">
+                <div class="timer-display" id="timerDisplay">25:00</div>
+            </div>
+            <div class="timer-controls">
+                <button class="btn btn-success" onclick="timerAction('start')">▶️ 开始</button>
+                <button class="btn btn-secondary" onclick="timerAction('pause')">⏸️ 暂停</button>
+                <button class="btn btn-danger" onclick="timerAction('reset')">🔄 重置</button>
+                <select id="timerPreset" onchange="timerPresetChange()" style="padding:10px 14px;border-radius:8px;border:2px solid var(--gray-200);background:var(--gray-50)">
+                    <option value="1500">🍅 番茄钟 25分</option>
+                    <option value="300">☕ 短休息 5分</option>
+                    <option value="600">🧘 长休息 10分</option>
+                    <option value="3600">📚 专注 60分</option>
+                    <option value="60">⏱️ 测试 1分</option>
+                </select>
             </div>
         </div>
     </div>

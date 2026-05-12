@@ -636,6 +636,9 @@ textarea {
     .header h1 { font-size: 1.1rem; }
     .nav-grid { grid-template-columns: repeat(2, 1fr); }
     .card { padding: 16px; }
+    .timer-circle { width: 180px; height: 180px; }
+    .timer-circle::before { width: 150px; height: 150px; }
+    .timer-display { font-size: 2.5rem; }
     .grid-2 { grid-template-columns: 1fr; }
     .room-bar { flex-direction: column; align-items: stretch; text-align: center; }
 }

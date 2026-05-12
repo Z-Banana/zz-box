@@ -1,6 +1,6 @@
 // ==================== 全局状态 ====================
 const socket = io({
-    transports: ['polling', 'websocket'],
+    transports: ['polling'],  // Force HTTP polling only
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,

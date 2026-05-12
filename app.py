@@ -3,9 +3,6 @@ import random
 import string
 import time
 from datetime import datetime, timedelta
-import eventlet
-eventlet.monkey_patch()
-
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
@@ -516,4 +513,4 @@ def handle_remote_control(data):
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print('[SERVER] Starting on port', port)
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)

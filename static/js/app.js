@@ -1,6 +1,6 @@
 // ==================== 全局状态 ====================
 const socket = io({
-    transports: ['polling'],  // Force HTTP polling only
+    transports: ['polling', 'websocket'],
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
@@ -12,9 +12,6 @@ let deviceId = localStorage.getItem('device_id') || generateId();
 let nickname = localStorage.getItem('nickname') || '我的设备';
 let currentRooms = {};
 let roomCreators = {}; // {type: device_id} 记录谁是房主
-let rtcPeer = null;
-let rtcDataChannel = null;
-let receivedChunks = [];
 let fileMeta = null;
 let pendingFile = null;
 let deviceListCache = [];
@@ -30,92 +27,18 @@ document.addEventListener('DOMContentLoaded', () => {
         card.addEventListener('click', () => switchTab(card.dataset.tab));
     });
 
-    socket.on('connect', () => {
-        showToast('已连接服务器', 'success');
-        updateConnStatus(true);
-        socket.emit('register', {device_id: deviceId, nickname: nickname});
-    });
 
-    socket.on('disconnect', () => updateConnStatus(false));
-    socket.on('registered', (data) => {
-        document.getElementById('onlineCount').textContent = data.online_count;
-    });
-    socket.on('device_online', (data) => {
-        showToast(`${data.nickname} 上线`, 'success');
-        fetchDevices();
-    });
-    socket.on('device_offline', () => fetchDevices());
 
-    socket.on('webrtc_offer', handleRTCOffer);
-    socket.on('webrtc_answer', handleRTCAnswer);
-    socket.on('webrtc_ice_candidate', handleICECandidate);
 
-    socket.on('clipboard_update', (data) => {
-        if (currentRooms.clipboard === data.room_code) {
-            showToast(`${data.item.nickname} 更新了剪贴板`, 'info');
-            renderClipboardItem(data.item);
-        }
-    });
 
-    socket.on('bill_update', (data) => {
-        if (currentRooms.bill === data.room_code) loadBill(data.room_code);
-    });
 
-    socket.on('remote_control', (data) => handleRemoteCmd(data));
 
-    socket.on('relay_message', (data) => {
-        showToast(`收到 ${data.from_nickname || '未知设备'} 的链接`, 'info');
-        renderRelayItem(data);
-    });
 
-    socket.on('dice_roll', (data) => {
-        if (currentRooms.dice === data.room_code) showDiceResult(data.roll);
-    });
 
-    socket.on('vote_created', (data) => {
-        if (currentRooms.vote === data.room_code) {
-            showVoteActive(data.vote);
-            checkOwner('vote', data.vote.created_by);
-        }
-    });
-    socket.on('vote_update', (data) => {
-        if (currentRooms.vote === data.room_code) updateVoteResults(data.options, data.total);
-    });
-    socket.on('vote_revealed', (data) => {
-        if (currentRooms.vote === data.room_code) {
-            updateVoteResults(data.options, data.total);
-            document.getElementById('voteResultSection').style.display = 'block';
-            document.getElementById('voteRevealBtn').style.display = 'none';
-        }
-    });
 
-    socket.on('roulette_setup', (data) => {
-        if (currentRooms.roulette === data.room_code) {
-            document.getElementById('rouletteSetup').style.display = 'none';
-            document.getElementById('rouletteGame').style.display = 'block';
-        }
-    });
-    socket.on('roulette_spin', (data) => {
-        if (currentRooms.roulette === data.room_code) startRouletteAnimation();
-    });
-    socket.on('roulette_result', (data) => {
-        if (currentRooms.roulette === data.room_code) stopRouletteAnimation(data.winner);
-    });
 
-    socket.on('random_setup', (data) => {
-        if (currentRooms.random === data.room_code) {
-            document.getElementById('randomSetup').style.display = 'none';
-            document.getElementById('randomGame').style.display = 'block';
-        }
-    });
-    socket.on('random_result', (data) => {
-        if (currentRooms.random === data.room_code) {
-            document.getElementById('randomResult').textContent = data.result;
-            showToast(`${data.picker || '某人'} 抽中了: ${data.result}`, 'info');
-        }
-    });
 
-    setInterval(() => { if (socket.connected) socket.emit('heartbeat', {device_id: deviceId}); }, 15000);
+    setInterval(() => { httpHeartbeat(); }, 15000);
     fetchDevices();
     setInterval(fetchDevices, 15000);
     loadRelayInbox();
@@ -127,6 +50,31 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==================== 工具函数 ====================
 function generateId() {
     return Math.random().toString(36).substring(2, 14);
+}
+
+async function httpRegister() {
+    try {
+        const res = await fetch('/api/device/register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({device_id: deviceId, nickname: nickname})
+        });
+        const data = await res.json();
+        updateConnStatus(true);
+        document.getElementById('onlineCount').textContent = data.online_count;
+    } catch (e) {
+        updateConnStatus(false);
+    }
+}
+
+async function httpHeartbeat() {
+    try {
+        await fetch('/api/device/heartbeat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({device_id: deviceId})
+        });
+    } catch (e) {}
 }
 
 function showToast(msg, type='info') {
@@ -159,7 +107,7 @@ function updateConnStatus(online) {
 function saveNickname() {
     nickname = document.getElementById('nicknameInput').value || '我的设备';
     localStorage.setItem('nickname', nickname);
-    socket.emit('register', {device_id: deviceId, nickname: nickname});
+    httpRegister();
     showToast('昵称已保存', 'success');
 }
 
@@ -354,7 +302,7 @@ async function joinRoom(type, subtype) {
     roomCreators[type] = roomData.created_by;
 
     currentRooms[type] = code;
-    socket.emit('join_room_socket', {room_code: code});
+    // join_room via polling
 
     if (type === 'transfer') {
         document.getElementById('transferJoinPanel').style.display = 'none';
@@ -426,7 +374,7 @@ async function joinRoom(type, subtype) {
 function leaveRoom(type) {
     delete currentRooms[type];
     delete roomCreators[type];
-    socket.emit('leave_room_socket', {room_code: ''});
+    // leave_room via polling
 
     const resetMap = {
         transfer: {join: 'transferJoinPanel', panel: 'transferPanel', bar: 'transferRoomBar', input: 'transferRoomInput'},
@@ -470,53 +418,8 @@ function checkOwner(type, creatorId) {
 }
 
 // ==================== 1. 文件传输 ====================
-async function initRTC(target, initiator=true) {
-    const cfg = {iceServers: [{urls:'stun:stun.l.google.com:19302'}, {urls:'stun:stun1.l.google.com:19302'}]};
-    rtcPeer = new RTCPeerConnection(cfg);
-    rtcPeer.onicecandidate = (e) => {
-        if (e.candidate) socket.emit('webrtc_ice_candidate', {
-            target_device: target, candidate: e.candidate, from_device: deviceId
-        });
-    };
-    rtcPeer.ondatachannel = (e) => setupChannel(e.channel);
-    if (initiator) {
-        rtcDataChannel = rtcPeer.createDataChannel('file');
-        setupChannel(rtcDataChannel);
-        const offer = await rtcPeer.createOffer();
-        await rtcPeer.setLocalDescription(offer);
-        socket.emit('webrtc_offer', {
-            target_device: target, offer, from_device: deviceId, from_nickname: nickname
-        });
-    }
 }
 
-function setupChannel(ch) {
-    rtcDataChannel = ch;
-    ch.binaryType = 'arraybuffer';
-    ch.onopen = () => {
-        showToast('连接已建立', 'success');
-        if (pendingFile) sendFileData();
-    };
-    ch.onmessage = (e) => {
-        if (typeof e.data === 'string') {
-            const msg = JSON.parse(e.data);
-            if (msg.type === 'meta') {
-                fileMeta = msg;
-                receivedChunks = [];
-                showTransferStatus(`接收中: ${msg.name}`, 0);
-            } else if (msg.type === 'done') {
-                const blob = new Blob(receivedChunks);
-                const url = URL.createObjectURL(blob);
-                const div = document.createElement('div');
-                div.className = 'file-item';
-                div.innerHTML = `<span>📄 ${escapeHtml(fileMeta.name)} (${formatSize(fileMeta.size)})</span><a href="${url}" download="${fileMeta.name}" class="btn btn-sm btn-primary">下载</a>`;
-                document.getElementById('receivedFiles').prepend(div);
-                showToast('文件接收完成', 'success');
-                document.getElementById('transferStatus').innerHTML = '';
-                // 清理状态，防止标题残留
-                fileMeta = null;
-                receivedChunks = [];
-            }
         } else {
             receivedChunks.push(e.data);
             if (fileMeta) {
@@ -527,29 +430,8 @@ function setupChannel(ch) {
     };
 }
 
-async function handleRTCOffer(data) {
-    const cfg = {iceServers: [{urls:'stun:stun.l.google.com:19302'}, {urls:'stun:stun1.l.google.com:19302'}]};
-    rtcPeer = new RTCPeerConnection(cfg);
-    rtcPeer.onicecandidate = (e) => {
-        if (e.candidate) socket.emit('webrtc_ice_candidate', {
-            target_device: data.from_device, candidate: e.candidate, from_device: deviceId
-        });
-    };
-    rtcPeer.ondatachannel = (e) => setupChannel(e.channel);
-    await rtcPeer.setRemoteDescription(new RTCSessionDescription(data.offer));
-    const answer = await rtcPeer.createAnswer();
-    await rtcPeer.setLocalDescription(answer);
-    socket.emit('webrtc_answer', {target_device: data.from_device, answer, from_device: deviceId});
-    showToast(`${data.from_nickname || '某设备'} 请求发送文件`, 'info');
-}
 
-async function handleRTCAnswer(data) {
-    await rtcPeer.setRemoteDescription(new RTCSessionDescription(data.answer));
-}
 
-async function handleICECandidate(data) {
-    if (rtcPeer) await rtcPeer.addIceCandidate(new RTCIceCandidate(data.candidate));
-}
 
 function handleFileSelect(e) {
     const file = e.target.files[0];
@@ -558,32 +440,36 @@ function handleFileSelect(e) {
     if (!target) { showToast('请选择接收设备', 'error'); return; }
     pendingFile = file;
     fileMeta = {name: file.name, size: file.size, type: file.type};
-    initRTC(target, true);
     showTransferStatus(`准备发送: ${file.name}`, 0);
+    // HTTP upload will be triggered by sendFileData
 }
 
 function sendFileData() {
-    if (!rtcDataChannel || rtcDataChannel.readyState !== 'open' || !pendingFile) return;
-    rtcDataChannel.send(JSON.stringify({type:'meta', ...fileMeta}));
-    const chunkSize = 16384;
-    let offset = 0;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        rtcDataChannel.send(e.target.result);
-        offset += e.target.result.byteLength;
-        const pct = Math.min(100, offset / pendingFile.size * 100);
-        showTransferStatus(`发送中: ${fileMeta.name}`, pct);
-        if (offset < pendingFile.size) readChunk();
-        else {
-            rtcDataChannel.send(JSON.stringify({type:'done'}));
-            showToast('发送完成', 'success');
-            pendingFile = null;
-            fileMeta = null; // 清理，防止标题残留
-            document.getElementById('transferStatus').innerHTML = '';
-        }
-    };
-    function readChunk() { reader.readAsArrayBuffer(pendingFile.slice(offset, offset + chunkSize)); }
-    readChunk();
+    // WebRTC removed - using HTTP upload instead
+    if (!pendingFile) return;
+    const target = document.getElementById('transferTarget').value;
+    if (!target) { showToast('请选择接收设备', 'error'); return; }
+
+    const formData = new FormData();
+    formData.append('file', pendingFile);
+    formData.append('from_device', deviceId);
+    formData.append('from_nickname', nickname);
+    formData.append('to_device', target);
+
+    showTransferStatus(`上传中: ${fileMeta.name}`, 50);
+
+    fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+    }).then(res => res.json()).then(data => {
+        showToast('发送完成', 'success');
+        pendingFile = null;
+        fileMeta = null;
+        document.getElementById('transferStatus').innerHTML = '';
+    }).catch(err => {
+        showToast('发送失败', 'error');
+        console.error(err);
+    });
 }
 
 function showTransferStatus(text, pct) {
@@ -713,7 +599,8 @@ async function copyText(btn) {
 // ==================== 4. 手机遥控（加强版） ====================
 function sendRemote(action) {
     if (!currentRooms.remote) return;
-    socket.emit('remote_control', {
+    // remote_control via polling
+    fetch('/api/remote', {
         room_code: currentRooms.remote,
         action: action,
         from_device: deviceId,

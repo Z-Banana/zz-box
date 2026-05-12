@@ -4,11 +4,9 @@ import string
 import time
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify
-from flask_socketio import SocketIO, emit, join_room, leave_room
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cross-device-toolbox-secret')
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', ping_timeout=60, ping_interval=25, max_http_buffer_size=1e8, logger=False, engineio_logger=False)
 
 # 内存数据
 online_devices = {}
@@ -39,8 +37,6 @@ def clean_offline():
     offline = [did for did, info in online_devices.items() if now - info.get('last_seen', now) > timeout]
     for did in offline:
         del online_devices[did]
-        socketio.emit('device_offline', {'device_id': did})
-
 
 # ==================== 页面路由 ====================
 @app.route('/')
@@ -59,7 +55,6 @@ def register_device():
     nickname = data.get('nickname', '未知设备')
     online_devices[device_id] = {
         'nickname': nickname,
-        'sid': None,
         'last_seen': now_ts(),
         'ip': request.remote_addr
     }
@@ -128,7 +123,6 @@ def clipboard_api(room_code):
         clipboard_data.setdefault(room_code, [])
         clipboard_data[room_code].insert(0, item)
         clipboard_data[room_code] = clipboard_data[room_code][:50]
-        socketio.emit('clipboard_update', {'room_code': room_code, 'item': item}, room=room_code)
         return jsonify({'success': True})
     return jsonify(clipboard_data.get(room_code, []))
 
@@ -155,7 +149,6 @@ def add_bill_item(room_code):
     }
     bill_data.setdefault(room_code, {'title': 'AA账单', 'items': []})
     bill_data[room_code]['items'].append(item)
-    socketio.emit('bill_update', {'room_code': room_code}, room=room_code)
     return jsonify({'item_id': item['id']})
 
 @app.route('/api/bill/<room_code>/calculate')
@@ -210,7 +203,6 @@ def send_relay():
         relay_messages.pop(0)
     target = data.get('to_device')
     if target in online_devices:
-        socketio.emit('relay_message', msg, room=online_devices[target]['sid'])
     return jsonify({'success': True})
 
 @app.route('/api/relay/<device_id>')
@@ -237,13 +229,6 @@ def vote_api(room_code):
                 'revealed': False,
                 'created_by': data.get('device_id')
             }
-            socketio.emit('vote_created', {
-                'room_code': room_code,
-                'vote': {
-                    'question': data['question'],
-                    'options': vote_data[room_code]['options'],
-                    'revealed': False,
-                    'created_by': data.get('device_id')
                 }
             }, room=room_code)
             return jsonify({'success': True})
@@ -259,10 +244,6 @@ def vote_api(room_code):
             if option in v['options']:
                 v['options'][option] += 1
                 v['voters'].add(voter)
-                socketio.emit('vote_update', {
-                    'room_code': room_code,
-                    'options': v['options'],
-                    'total': len(v['voters'])
                 }, room=room_code)
             return jsonify({'success': True})
     else:
@@ -283,10 +264,6 @@ def reveal_vote(room_code):
     v = vote_data.get(room_code)
     if v:
         v['revealed'] = True
-        socketio.emit('vote_revealed', {
-            'room_code': room_code,
-            'options': v['options'],
-            'total': len(v['voters'])
         }, room=room_code)
     return jsonify({'success': True})
 
@@ -314,7 +291,6 @@ def dice_api(room_code):
             dice_rooms[room_code]['history'].append(roll_data)
             if len(dice_rooms[room_code]['history']) > 50:
                 dice_rooms[room_code]['history'].pop(0)
-            socketio.emit('dice_roll', {'room_code': room_code, 'roll': roll_data}, room=room_code)
             return jsonify(roll_data)
     else:
         room = dice_rooms.get(room_code, {'members': set(), 'last_roll': None, 'history': []})
@@ -339,11 +315,7 @@ def roulette_api(room_code):
                 'created_by': data.get('device_id'),
                 'mode': data.get('mode', 'manual')  # manual 或 auto
             }
-            socketio.emit('roulette_setup', {
-                'room_code': room_code,
-                'names': data.get('names', []),
-                'mode': data.get('mode', 'manual')
-            }, room=room_code)
+
             return jsonify({'success': True})
         elif action == 'spin':
             r = roulette_data.get(room_code)
@@ -351,7 +323,6 @@ def roulette_api(room_code):
                 return jsonify({'error': '房间不存在'}), 400
             r['spinning'] = True
             r['winner'] = None
-            socketio.emit('roulette_spin', {'room_code': room_code}, room=room_code)
             import threading
             def finish():
                 time.sleep(3)
@@ -366,7 +337,6 @@ def roulette_api(room_code):
                 winner = random.choice(names)
                 r['spinning'] = False
                 r['winner'] = winner
-                socketio.emit('roulette_result', {'room_code': room_code, 'winner': winner}, room=room_code)
             threading.Thread(target=finish).start()
             return jsonify({'success': True})
     else:
@@ -387,11 +357,7 @@ def random_api(room_code):
                 'mode': data.get('mode', 'individual'),
                 'created_by': data.get('device_id')
             }
-            socketio.emit('random_setup', {
-                'room_code': room_code,
-                'options': data.get('options', []),
-                'mode': data.get('mode', 'individual')
-            }, room=room_code)
+
             return jsonify({'success': True})
         elif action == 'pick':
             r = random_picker.get(room_code)
@@ -399,118 +365,3 @@ def random_api(room_code):
                 return jsonify({'error': '无选项'}), 400
             result = random.choice(r['options'])
             if r.get('mode') == 'group':
-                socketio.emit('random_result', {
-                    'room_code': room_code,
-                    'result': result,
-                    'picker': data.get('nickname'),
-                    'picker_id': data.get('device_id'),
-                    'mode': 'group'
-                }, room=room_code)
-            return jsonify({'result': result})
-    else:
-        r = random_picker.get(room_code, {'options': [], 'result': None, 'mode': 'individual', 'created_by': None})
-        return jsonify(r)
-
-# ==================== SocketIO 事件 ====================
-@socketio.on('connect')
-def handle_connect():
-    emit('connected', {'sid': request.sid})
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    for did, info in list(online_devices.items()):
-        if info.get('sid') == request.sid:
-            del online_devices[did]
-            socketio.emit('device_offline', {'device_id': did})
-            break
-
-@socketio.on('register')
-def handle_register(data):
-    global relay_messages
-    device_id = data.get('device_id')
-    nickname = data.get('nickname', '未知设备')
-    online_devices[device_id] = {
-        'nickname': nickname,
-        'sid': request.sid,
-        'last_seen': now_ts(),
-        'ip': request.remote_addr
-    }
-    join_room(device_id)
-    emit('registered', {'device_id': device_id, 'online_count': len(online_devices)})
-    socketio.emit('device_online', {
-        'device_id': device_id,
-        'nickname': nickname,
-        'ip': request.remote_addr
-    }, skip_sid=request.sid)
-    pending = [m for m in relay_messages if m['to_device'] == device_id]
-    if pending:
-        for m in pending:
-            emit('relay_message', m)
-        relay_messages = [m for m in relay_messages if m['to_device'] != device_id]
-
-@socketio.on('heartbeat')
-def handle_heartbeat(data):
-    device_id = data.get('device_id')
-    if device_id in online_devices:
-        online_devices[device_id]['last_seen'] = now_ts()
-        online_devices[device_id]['sid'] = request.sid
-
-@socketio.on('join_room_socket')
-def handle_join_room_socket(data):
-    room_code = data.get('room_code', '').upper()
-    if room_code and room_code in rooms:
-        join_room(room_code)
-        rooms[room_code]['members'].add(request.sid)
-        emit('joined_room', {'room_code': room_code})
-
-@socketio.on('leave_room_socket')
-def handle_leave_room_socket(data):
-    room_code = data.get('room_code', '').upper()
-    if room_code:
-        leave_room(room_code)
-        if room_code in rooms:
-            rooms[room_code]['members'].discard(request.sid)
-
-@socketio.on('webrtc_offer')
-def handle_webrtc_offer(data):
-    target = data.get('target_device')
-    if target and target in online_devices:
-        socketio.emit('webrtc_offer', {
-            'offer': data.get('offer'),
-            'from_device': data.get('from_device'),
-            'from_nickname': data.get('from_nickname')
-        }, room=online_devices[target]['sid'])
-
-@socketio.on('webrtc_answer')
-def handle_webrtc_answer(data):
-    target = data.get('target_device')
-    if target and target in online_devices:
-        socketio.emit('webrtc_answer', {
-            'answer': data.get('answer'),
-            'from_device': data.get('from_device')
-        }, room=online_devices[target]['sid'])
-
-@socketio.on('webrtc_ice_candidate')
-def handle_ice_candidate(data):
-    target = data.get('target_device')
-    if target and target in online_devices:
-        socketio.emit('webrtc_ice_candidate', {
-            'candidate': data.get('candidate'),
-            'from_device': data.get('from_device')
-        }, room=online_devices[target]['sid'])
-
-@socketio.on('remote_control')
-def handle_remote_control(data):
-    room_code = data.get('room_code', '').upper()
-    action = data.get('action')
-    if room_code:
-        socketio.emit('remote_control', {
-            'action': action,
-            'from_device': data.get('from_device'),
-            'from_nickname': data.get('from_nickname')
-        }, room=room_code)
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    print('[SERVER] Starting on port', port)
-    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)

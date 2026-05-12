@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>跨设备实用工具箱</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>📦 跨设备工具箱</h1>
+        <div class="device-info">
+            <input type="text" id="nicknameInput" placeholder="设备昵称" value="我的设备" style="width:120px">
+            <button class="btn btn-sm btn-secondary" onclick="saveNickname()">保存</button>
+            <span class="badge badge-online" id="connStatus">● 已连接</span>
+            <span class="text-sm" style="color:var(--gray-500)">在线: <b id="onlineCount">0</b></span>
+            <a href="/about" class="btn btn-sm btn-secondary">关于</a>
+        </div>
+    </div>
+
+    <div class="nav-grid" id="navGrid">
+        <div class="nav-card active" data-tab="transfer"><span class="icon">📁</span>文件传输</div>
+        <div class="nav-card" data-tab="share"><span class="icon">🔗</span>网站分享</div>
+        <div class="nav-card" data-tab="clipboard"><span class="icon">📋</span>剪贴板</div>
+        <div class="nav-card" data-tab="remote"><span class="icon">🎮</span>手机遥控</div>
+        <div class="nav-card" data-tab="bill"><span class="icon">💰</span>AA账单</div>
+        <div class="nav-card" data-tab="dice"><span class="icon">🎲</span>同步掷骰</div>
+        <div class="nav-card" data-tab="vote"><span class="icon">📊</span>匿名投票</div>
+        <div class="nav-card" data-tab="roulette"><span class="icon">🎯</span>随机抽人</div>
+        <div class="nav-card" data-tab="random"><span class="icon">🎱</span>随机决定</div>
+    </div>
+
+    <!-- 1. 文件传输（加入房间） -->
+    <div class="card active" id="tab-transfer">
+        <div class="card-title">📁 点对点文件传输</div>
+        <div class="room-bar" id="transferRoomBar" style="display:none">
+            <div><span style="font-size:0.8rem;opacity:0.9">房间</span><span class="room-code" id="transferRoomCode"></span></div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="openInvite()">邀请</button>
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="leaveRoom('transfer')">退出</button>
+            </div>
+        </div>
+        <div id="transferJoinPanel">
+            <p style="color:var(--gray-500);margin-bottom:16px">创建一个房间，邀请其他设备加入后传输文件</p>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="createRoom('transfer')">➕ 创建房间</button>
+                <button class="btn btn-secondary" onclick="showJoinInput('transfer')">🔗 加入房间</button>
+            </div>
+            <div id="transferJoinInput" style="display:none;margin-top:12px">
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="transferRoomInput" placeholder="6位房间码" maxlength="6" style="text-transform:uppercase;flex:1">
+                    <button class="btn btn-primary" onclick="joinRoom('transfer')">加入</button>
+                    <button class="btn btn-secondary" onclick="openScanModal('transfer')">📷 扫码</button>
+                </div>
+            </div>
+        </div>
+        <div id="transferPanel" style="display:none">
+            <div class="grid-2">
+                <div>
+                    <div class="form-group">
+                        <label>选择接收设备</label>
+                        <select id="transferTarget" class="w-full"></select>
+                    </div>
+                    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                        <div class="icon">📎</div>
+                        <p style="font-weight:600">点击或拖拽文件到此处</p>
+                        <p class="text-sm" style="color:var(--gray-500);margin-top:4px">点对点直连，不经过服务器</p>
+                        <input type="file" id="fileInput" style="display:none" onchange="handleFileSelect(event)">
+                    </div>
+                    <div id="transferStatus" class="mt-3"></div>
+                </div>
+                <div>
+                    <div class="flex-between" style="margin-bottom:12px">
+                        <h3 style="font-size:1rem">📥 接收记录</h3>
+                        <button class="btn btn-sm btn-secondary" onclick="clearReceived()">清空</button>
+                    </div>
+                    <div id="receivedFiles" style="max-height:320px;overflow-y:auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 网站快捷分享（加入房间） -->
+    <div class="card" id="tab-share">
+        <div class="card-title">🔗 网站快捷分享</div>
+        <div class="room-bar" id="shareRoomBar" style="display:none">
+            <div><span style="font-size:0.8rem;opacity:0.9">房间</span><span class="room-code" id="shareRoomCode"></span></div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="openInvite()">邀请</button>
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="leaveRoom('share')">退出</button>
+            </div>
+        </div>
+        <div id="shareJoinPanel">
+            <p style="color:var(--gray-500);margin-bottom:16px">创建一个房间，邀请其他设备加入后分享网址</p>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="createRoom('share')">➕ 创建房间</button>
+                <button class="btn btn-secondary" onclick="showJoinInput('share')">🔗 加入房间</button>
+            </div>
+            <div id="shareJoinInput" style="display:none;margin-top:12px">
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="shareRoomInput" placeholder="6位房间码" maxlength="6" style="text-transform:uppercase;flex:1">
+                    <button class="btn btn-primary" onclick="joinRoom('share')">加入</button>
+                    <button class="btn btn-secondary" onclick="openScanModal('share')">📷 扫码</button>
+                </div>
+            </div>
+        </div>
+        <div id="sharePanel" style="display:none">
+            <div class="grid-2">
+                <div>
+                    <div class="form-group">
+                        <label>输入网址生成二维码</label>
+                        <input type="url" id="shareUrl" placeholder="https://example.com" oninput="generateShareQR()">
+                    </div>
+                    <div class="form-group">
+                        <label>或选择设备直接发送</label>
+                        <select id="shareTarget" class="w-full"></select>
+                    </div>
+                    <button class="btn btn-primary w-full" onclick="sendLinkRelay()">🚀 发送链接到设备</button>
+                </div>
+                <div class="qr-box">
+                    <div id="shareQR"></div>
+                    <p class="text-sm" style="color:var(--gray-500)">扫码访问或发送给其他设备</p>
+                </div>
+            </div>
+            <div class="mt-4">
+                <h3 style="font-size:1rem;margin-bottom:12px">📥 收到的链接</h3>
+                <div id="relayInbox"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 剪贴板 -->
+    <div class="card" id="tab-clipboard">
+        <div class="card-title">📋 跨设备剪贴板同步</div>
+        <div class="room-bar" id="cbRoomBar" style="display:none">
+            <div><span style="font-size:0.8rem;opacity:0.9">房间</span><span class="room-code" id="cbRoomCode"></span></div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="openInvite()">邀请</button>
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="leaveRoom('clipboard')">退出</button>
+            </div>
+        </div>
+        <div id="cbJoinPanel">
+            <p style="color:var(--gray-500);margin-bottom:16px">创建一个房间，邀请其他设备加入后同步剪贴板</p>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="createRoom('clipboard')">➕ 创建房间</button>
+                <button class="btn btn-secondary" onclick="showJoinInput('clipboard')">🔗 加入房间</button>
+            </div>
+            <div id="cbJoinInput" style="display:none;margin-top:12px">
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="cbRoomInput" placeholder="6位房间码" maxlength="6" style="text-transform:uppercase;flex:1">
+                    <button class="btn btn-primary" onclick="joinRoom('clipboard')">加入</button>
+                    <button class="btn btn-secondary" onclick="openScanModal('clipboard')">📷 扫码</button>
+                </div>
+            </div>
+        </div>
+        <div id="cbPanel" style="display:none">
+            <div class="form-group">
+                <label>发送内容</label>
+                <textarea id="cbContent" placeholder="在此输入文字，所有房间成员可见..."></textarea>
+            </div>
+            <button class="btn btn-primary w-full" onclick="sendClipboard()">📤 发送到房间</button>
+            <div class="mt-4">
+                <h3 style="font-size:1rem;margin-bottom:12px">📜 房间历史</h3>
+                <div id="cbHistory"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 手机遥控 -->
+    <div class="card" id="tab-remote">
+        <div class="card-title">🎮 手机遥控 PPT / 视频</div>
+        <div class="grid-2">
+            <div>
+                <h3 style="font-size:1rem;margin-bottom:12px">🖥️ 被控端（电脑）</h3>
+                <div id="hostPanel">
+                    <p style="color:var(--gray-500);margin-bottom:16px">创建一个遥控房间，手机扫码或输入房间码即可控制</p>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn btn-primary" onclick="createRoom('remote')">➕ 创建房间</button>
+                        <button class="btn btn-secondary" onclick="showJoinInput('remote')">🔗 加入房间</button>
+                    </div>
+                    <div id="hostJoinInput" style="display:none;margin-top:12px">
+                        <div style="display:flex;gap:8px">
+                            <input type="text" id="hostRoomInput" placeholder="房间码" maxlength="6" style="text-transform:uppercase;flex:1">
+                            <button class="btn btn-primary" onclick="joinRoom('remote','host')">开始</button>
+                            <button class="btn btn-secondary" onclick="openScanModal('remote')">📷 扫码</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="hostActive" style="display:none">
+                    <div class="room-bar" style="margin-bottom:12px">
+                        <div>房间 <span class="room-code" id="hostRoomCode"></span></div>
+                        <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="openInvite()">邀请</button>
+                    </div>
+                    <div class="qr-box" id="hostQR" style="margin-bottom:12px"></div>
+                    <p class="text-sm text-center" style="color:var(--gray-500)">手机扫码或输入房间码即可控制</p>
+                    <div class="mt-3" style="background:var(--gray-100);padding:12px;border-radius:8px;font-family:monospace;font-size:0.8rem;min-height:60px;max-height:120px;overflow-y:auto" id="remoteLog"></div>
+                    <p class="text-xs mt-2" style="color:var(--gray-500)">提示：请先打开 PowerPoint 并按 F5 开始放映</p>
+                    <button class="btn btn-sm btn-secondary mt-2" onclick="leaveRoom('remote')">退出房间</button>
+                </div>
+            </div>
+            <div>
+                <h3 style="font-size:1rem;margin-bottom:12px">📱 控制器（手机）</h3>
+                <div id="clientPanel">
+                    <p style="color:var(--gray-500);margin-bottom:16px">输入被控端的房间码进行连接</p>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn btn-secondary" onclick="showJoinInput('remoteClient')">🔗 加入房间</button>
+                    </div>
+                    <div id="clientJoinInput" style="display:none;margin-top:12px">
+                        <div style="display:flex;gap:8px">
+                            <input type="text" id="clientRoomInput" placeholder="房间码" maxlength="6" style="text-transform:uppercase;flex:1">
+                            <button class="btn btn-primary" onclick="joinRoom('remote','client')">连接</button>
+                            <button class="btn btn-secondary" onclick="openScanModal('remote')">📷 扫码</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="clientActive" style="display:none">
+                    <p class="text-center mb-3" style="color:var(--gray-600)">已连接，点击按钮控制</p>
+                    <div class="remote-grid">
+                        <div></div>
+                        <button class="remote-btn" onclick="sendRemote('prev')">⬆️</button>
+                        <div></div>
+                        <button class="remote-btn" onclick="sendRemote('prev')">⬅️</button>
+                        <button class="remote-btn" onclick="sendRemote('play')">⏯️</button>
+                        <button class="remote-btn" onclick="sendRemote('next')">➡️</button>
+                        <div></div>
+                        <button class="remote-btn" onclick="sendRemote('next')">⬇️</button>
+                        <div></div>
+                    </div>
+                    <button class="btn btn-sm btn-secondary w-full mt-3" onclick="leaveRoom('remote')">断开连接</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. AA账单 -->
+    <div class="card" id="tab-bill">
+        <div class="card-title">💰 多人AA账单助手</div>
+        <div class="room-bar" id="billRoomBar" style="display:none">
+            <div><span style="font-size:0.8rem;opacity:0.9">房间</span><span class="room-code" id="billRoomCode"></span></div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="openInvite()">邀请</button>
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="leaveRoom('bill')">退出</button>
+            </div>
+        </div>
+        <div id="billJoinPanel">
+            <p style="color:var(--gray-500);margin-bottom:16px">创建一个房间，多人共同记账自动分摊</p>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="createRoom('bill')">➕ 创建房间</button>
+                <button class="btn btn-secondary" onclick="showJoinInput('bill')">🔗 加入房间</button>
+            </div>
+            <div id="billJoinInput" style="display:none;margin-top:12px">
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="billRoomInput" placeholder="6位房间码" maxlength="6" style="text-transform:uppercase;flex:1">
+                    <button class="btn btn-primary" onclick="joinRoom('bill')">加入</button>
+                    <button class="btn btn-secondary" onclick="openScanModal('bill')">📷 扫码</button>
+                </div>
+            </div>
+        </div>
+        <div id="billPanel" style="display:none">
+            <div class="grid-2">
+                <div>
+                    <h3 style="font-size:1rem;margin-bottom:12px">➕ 添加消费</h3>
+                    <div class="form-group"><input type="text" id="billDesc" placeholder="描述（如：晚餐）"></div>
+                    <div class="form-group"><input type="number" id="billAmount" placeholder="金额（元）" step="0.01"></div>
+                    <div class="form-group"><input type="text" id="billPayer" placeholder="付款人"></div>
+                    <div class="form-group"><input type="text" id="billParticipants" placeholder="参与人（逗号分隔）"></div>
+                    <button class="btn btn-primary w-full" onclick="addBillItem()">添加记录</button>
+                </div>
+                <div>
+                    <h3 style="font-size:1rem;margin-bottom:12px">📊 账单明细</h3>
+                    <div id="billItems" style="max-height:240px;overflow-y:auto;"></div>
+                    <button class="btn btn-success w-full mt-3" onclick="calculateBill()">🧮 计算分摊</button>
+                    <div id="billResult" style="display:none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. 同步掷骰子 -->
+    <div class="card" id="tab-dice">
+        <div class="card-title">🎲 多人同步掷骰子</div>
+        <div class="room-bar" id="diceRoomBar" style="display:none">
+            <div><span style="font-size:0.8rem;opacity:0.9">房间</span><span class="room-code" id="diceRoomCode"></span></div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="openInvite()">邀请</button>
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="leaveRoom('dice')">退出</button>
+            </div>
+        </div>
+        <div id="diceJoinPanel">
+            <p style="color:var(--gray-500);margin-bottom:16px">创建一个房间，多人同步掷骰子</p>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="createRoom('dice')">➕ 创建房间</button>
+                <button class="btn btn-secondary" onclick="showJoinInput('dice')">🔗 加入房间</button>
+            </div>
+            <div id="diceJoinInput" style="display:none;margin-top:12px">
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="diceRoomInput" placeholder="6位房间码" maxlength="6" style="text-transform:uppercase;flex:1">
+                    <button class="btn btn-primary" onclick="joinRoom('dice')">加入</button>
+                    <button class="btn btn-secondary" onclick="openScanModal('dice')">📷 扫码</button>
+                </div>
+            </div>
+        </div>
+        <div id="dicePanel" style="display:none">
+            <div class="text-center mb-4">
+                <div id="diceDisplay" style="font-size:6rem;margin:20px 0">🎲</div>
+                <p id="diceResultText" style="font-size:1.25rem;font-weight:600;color:var(--primary)"></p>
+                <p id="diceRoller" style="color:var(--gray-500)"></p>
+            </div>
+            <div class="timer-controls">
+                <button class="btn btn-primary btn-lg" onclick="rollDice()">🎲 掷骰子</button>
+            </div>
+            <div class="mt-4">
+                <h4 style="font-size:0.875rem;color:var(--gray-600);margin-bottom:10px">历史记录</h4>
+                <div id="diceHistory"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. 匿名投票 -->
+    <div class="card" id="tab-vote">
+        <div class="card-title">📊 匿名投票</div>
+        <div class="room-bar" id="voteRoomBar" style="display:none">
+            <div><span style="font-size:0.8rem;opacity:0.9">房间</span><span class="room-code" id="voteRoomCode"></span></div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="openInvite()">邀请</button>
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="leaveRoom('vote')">退出</button>
+            </div>
+        </div>
+        <div id="voteJoinPanel">
+            <p style="color:var(--gray-500);margin-bottom:16px">创建一个房间，发起匿名投票</p>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="createRoom('vote')">➕ 创建房间</button>
+                <button class="btn btn-secondary" onclick="showJoinInput('vote')">🔗 加入房间</button>
+            </div>
+            <div id="voteJoinInput" style="display:none;margin-top:12px">
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="voteRoomInput" placeholder="6位房间码" maxlength="6" style="text-transform:uppercase;flex:1">
+                    <button class="btn btn-primary" onclick="joinRoom('vote')">加入</button>
+                    <button class="btn btn-secondary" onclick="openScanModal('vote')">📷 扫码</button>
+                </div>
+            </div>
+        </div>
+        <div id="votePanel" style="display:none">
+            <div id="voteCreateSection">
+                <h3 style="font-size:1rem;margin-bottom:12px">📝 创建投票</h3>
+                <div class="form-group">
+                    <label>投票问题</label>
+                    <input type="text" id="voteQuestion" placeholder="例如：周末去哪里玩？">
+                </div>
+                <div class="form-group">
+                    <label>选项（每行一个）</label>
+                    <textarea id="voteOptions" placeholder="选项1
+选项2
+选项3" style="min-height:100px"></textarea>
+                </div>
+                <button class="btn btn-primary w-full" onclick="createVote()">✅ 创建投票</button>
+            </div>
+            <div id="voteActiveSection" style="display:none">
+                <div class="flex-between" style="margin-bottom:12px">
+                    <h3 style="font-size:1rem;margin-bottom:0" id="voteQuestionDisplay"></h3>
+                    <button class="btn btn-sm btn-secondary" id="voteEditBtn" onclick="editVote()" style="display:none">✏️ 编辑</button>
+                </div>
+                <p class="text-sm" style="color:var(--gray-500);margin-bottom:16px">每人限投一票，投票结果实时更新</p>
+                <div id="voteOptionsList"></div>
+                <div class="mt-3" id="voteResultSection" style="display:none">
+                    <h4 style="font-size:0.875rem;margin-bottom:10px">📊 投票结果</h4>
+                    <div id="voteResults"></div>
+                    <p class="text-sm mt-2" style="color:var(--gray-500)">总票数: <b id="voteTotal">0</b></p>
+                </div>
+                <button class="btn btn-secondary w-full mt-3" id="voteRevealBtn" onclick="revealVote()">👁️ 公布结果</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 9. 随机抽人 -->
+    <div class="card" id="tab-roulette">
+        <div class="card-title">🎯 随机抽人 / 转盘</div>
+        <div class="room-bar" id="rouletteRoomBar" style="display:none">
+            <div><span style="font-size:0.8rem;opacity:0.9">房间</span><span class="room-code" id="rouletteRoomCode"></span></div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="openInvite()">邀请</button>
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="leaveRoom('roulette')">退出</button>
+            </div>
+        </div>
+        <div id="rouletteJoinPanel">
+            <p style="color:var(--gray-500);margin-bottom:16px">创建一个房间，随机抽取房间内成员</p>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="createRoom('roulette')">➕ 创建房间</button>
+                <button class="btn btn-secondary" onclick="showJoinInput('roulette')">🔗 加入房间</button>
+            </div>
+            <div id="rouletteJoinInput" style="display:none;margin-top:12px">
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="rouletteRoomInput" placeholder="6位房间码" maxlength="6" style="text-transform:uppercase;flex:1">
+                    <button class="btn btn-primary" onclick="joinRoom('roulette')">加入</button>
+                    <button class="btn btn-secondary" onclick="openScanModal('roulette')">📷 扫码</button>
+                </div>
+            </div>
+        </div>
+        <div id="roulettePanel" style="display:none">
+            <div id="rouletteSetup">
+                <p style="color:var(--gray-500);margin-bottom:12px">可手动输入名单，或不输入直接抽取房间成员</p>
+                <div class="form-group">
+                    <label>候选人名单（每行一个，留空则抽取房间成员）</label>
+                    <textarea id="rouletteNames" placeholder="张三
+李四
+王五" style="min-height:120px"></textarea>
+                </div>
+                <button class="btn btn-primary w-full" onclick="setupRoulette()">✅ 确定名单</button>
+            </div>
+            <div id="rouletteGame" style="display:none">
+                <div class="text-center mb-4">
+                    <div id="rouletteDisplay" style="font-size:2rem;font-weight:700;padding:20px;background:var(--gray-100);border-radius:12px;margin:10px 0;min-height:80px;display:flex;align-items:center;justify-content:center">
+                        点击开始
+                    </div>
+                    <p id="rouletteWinner" style="font-size:1.5rem;color:var(--primary);font-weight:700;margin-top:10px"></p>
+                </div>
+                <div class="timer-controls">
+                    <button class="btn btn-primary btn-lg" id="rouletteSpinBtn" onclick="spinRoulette()">🎯 开始抽选</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 10. 随机决定器 -->
+    <div class="card" id="tab-random">
+        <div class="card-title">🎱 随机决定器</div>
+        <div class="room-bar" id="randomRoomBar" style="display:none">
+            <div><span style="font-size:0.8rem;opacity:0.9">房间</span><span class="room-code" id="randomRoomCode"></span></div>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="openInvite()">邀请</button>
+                <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:none" onclick="leaveRoom('random')">退出</button>
+            </div>
+        </div>
+        <div id="randomJoinPanel">
+            <p style="color:var(--gray-500);margin-bottom:16px">创建一个房间，随机决定选项</p>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="createRoom('random')">➕ 创建房间</button>
+                <button class="btn btn-secondary" onclick="showJoinInput('random')">🔗 加入房间</button>
+            </div>
+            <div id="randomJoinInput" style="display:none;margin-top:12px">
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="randomRoomInput" placeholder="6位房间码" maxlength="6" style="text-transform:uppercase;flex:1">
+                    <button class="btn btn-primary" onclick="joinRoom('random')">加入</button>
+                    <button class="btn btn-secondary" onclick="openScanModal('random')">📷 扫码</button>
+                </div>
+            </div>
+        </div>
+        <div id="randomPanel" style="display:none">
+            <div id="randomSetup">
+                <div class="form-group">
+                    <label>选项（每行一个）</label>
+                    <textarea id="randomOptions" placeholder="吃火锅
+吃烧烤
+吃披萨" style="min-height:100px"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>模式</label>
+                    <select id="randomMode" class="w-full">
+                        <option value="individual">各自独立（每人点一下各自出结果）</option>
+                        <option value="group">共同决定（所有人统一出同一个结果）</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary w-full" onclick="setupRandom()">✅ 确定选项</button>
+            </div>
+            <div id="randomGame" style="display:none">
+                <div class="flex-between" style="margin-bottom:12px">
+                    <h3 style="font-size:1rem;margin-bottom:0">🎱 随机结果</h3>
+                    <button class="btn btn-sm btn-secondary" id="randomEditBtn" onclick="editRandom()" style="display:none">✏️ 编辑</button>
+                </div>
+                <div class="text-center mb-4">
+                    <div id="randomResult" style="font-size:2.5rem;font-weight:700;color:var(--primary);padding:30px;background:var(--gray-50);border-radius:16px;margin:10px 0;min-height:100px;display:flex;align-items:center;justify-content:center">
+                        ?
+                    </div>
+                </div>
+                <div class="timer-controls">
+                    <button class="btn btn-primary btn-lg" onclick="pickRandom()">🎱 随机选一个</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 邀请面板 -->
+<div class="modal-overlay hidden" id="inviteModal" onclick="closeInvite()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <h3 style="margin-bottom:16px">📡 邀请设备加入</h3>
+        <p class="text-sm" style="color:var(--gray-500);margin-bottom:12px">同一网络下的在线设备</p>
+        <div class="device-chips" id="inviteDevices" style="margin-bottom:16px;justify-content:center"></div>
+        <div class="qr-box" style="margin-bottom:16px">
+            <div id="inviteQR"></div>
+            <p class="text-xs" style="color:var(--gray-500)">扫码加入当前房间</p>
+        </div>
+        <button class="btn btn-secondary w-full" onclick="closeInvite()">关闭</button>
+    </div>
+</div>
+
+<!-- 扫码面板 -->
+<div class="modal-overlay hidden" id="scanModal" onclick="closeScanModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <h3 style="margin-bottom:16px">📷 扫码加入</h3>
+        <p class="text-sm" style="color:var(--gray-500);margin-bottom:12px">请使用另一台设备扫描下方二维码</p>
+        <div class="qr-box" style="margin-bottom:16px">
+            <div id="scanQR"></div>
+        </div>
+        <p class="text-xs" style="color:var(--gray-500);margin-bottom:16px">或手动输入房间码：<b id="scanRoomCode" style="font-size:1.2rem;color:var(--primary)"></b></p>
+        <button class="btn btn-secondary w-full" onclick="closeScanModal()">关闭</button>
+    </div>
+</div>
+
+<!-- 抽人结果全屏 -->
+<div class="modal-overlay hidden" id="rouletteResultModal" onclick="closeRouletteResult()">
+    <div class="modal-box" style="max-width:500px;padding:40px" onclick="event.stopPropagation()">
+        <div style="font-size:4rem;margin-bottom:20px">🎉</div>
+        <h2 style="margin-bottom:12px">抽选结果</h2>
+        <div id="rouletteResultName" style="font-size:2.5rem;font-weight:700;color:var(--primary);margin:20px 0"></div>
+        <button class="btn btn-primary w-full" onclick="closeRouletteResult()">知道了</button>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

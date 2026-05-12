@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>关于本站 - 跨设备实用工具箱</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .about-card {
+            background: var(--white);
+            border-radius: var(--radius);
+            padding: 32px;
+            box-shadow: var(--shadow-lg);
+            max-width: 720px;
+            margin: 40px auto;
+        }
+        .about-card h2 {
+            color: var(--primary-dark);
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+        .about-card h3 {
+            color: var(--gray-700);
+            margin: 24px 0 12px;
+            font-size: 1.125rem;
+            border-bottom: 2px solid var(--gray-100);
+            padding-bottom: 8px;
+        }
+        .about-card p, .about-card li {
+            color: var(--gray-600);
+            line-height: 1.8;
+            margin-bottom: 10px;
+        }
+        .about-card ul {
+            margin-left: 20px;
+            margin-bottom: 16px;
+        }
+        .about-card .highlight {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+        }
+        .about-card .info-box {
+            background: var(--gray-50);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin: 16px 0;
+            border-left: 4px solid var(--primary);
+        }
+        .about-card .btn-back {
+            display: inline-block;
+            margin-top: 20px;
+        }
+        .about-footer {
+            text-align: center;
+            margin-top: 32px;
+            padding-top: 20px;
+            border-top: 1px solid var(--gray-200);
+            color: var(--gray-500);
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="about-card">
+            <h2>📦 关于跨设备实用工具箱</h2>
+
+            <div class="info-box">
+                <p><strong>开发者：</strong><span class="highlight">【请在这里填写你的名字/昵称】</span></p>
+                <p><strong>学校/组织：</strong><span class="highlight">【请在这里填写你的学校或组织】</span></p>
+                <p><strong>联系方式：</strong><span class="highlight">【请在这里填写邮箱或社交账号】</span></p>
+                <p><strong>版本：</strong>v2.0</p>
+            </div>
+
+            <h3>🎯 项目介绍</h3>
+            <p>跨设备实用工具箱是一个完全免费、开源的在线工具集合，旨在帮助用户在不同设备之间实现便捷的文件传输、信息共享和互动协作。</p>
+            <p>无需下载安装任何软件，只需打开浏览器即可使用。所有功能均基于 Web 技术构建，支持手机、电脑、平板等各类设备。</p>
+
+            <h3>✨ 主要功能</h3>
+            <ul>
+                <li><strong>📁 点对点文件传输</strong> — 基于 WebRTC 技术，文件不经过服务器，直接设备间传输</li>
+                <li><strong>🔗 网站快捷分享</strong> — 生成二维码或一键发送到其他设备</li>
+                <li><strong>📋 剪贴板同步</strong> — 跨设备复制粘贴，实时同步</li>
+                <li><strong>🎮 手机遥控</strong> — 用手机控制电脑上的 PPT/视频播放</li>
+                <li><strong>⏰ 共享时钟</strong> — 多人同步计时器和闹钟</li>
+                <li><strong>💰 AA 账单</strong> — 多人消费自动分摊计算</li>
+                <li><strong>🎲 随机工具</strong> — 掷骰子、随机抽人、投票、决定器</li>
+            </ul>
+
+            <h3>🔒 隐私说明</h3>
+            <p>本项目高度重视用户隐私：</p>
+            <ul>
+                <li>文件传输采用点对点加密，不经过服务器存储</li>
+                <li>不收集任何个人身份信息</li>
+                <li>所有数据仅在会话期间临时存储，关闭页面后自动清除</li>
+                <li>无需注册账号即可使用全部功能</li>
+            </ul>
+
+            <h3>🛠 技术栈</h3>
+            <ul>
+                <li>前端：原生 HTML5 / CSS3 / JavaScript</li>
+                <li>后端：Python + Flask + Flask-SocketIO</li>
+                <li>实时通信：WebSocket + WebRTC</li>
+                <li>部署：Pxxl App / 任何支持 Python 的平台</li>
+            </ul>
+
+            <h3>📜 开源协议</h3>
+            <p>本项目采用 MIT 协议开源，欢迎自由使用、修改和分发。</p>
+            <p>GitHub 仓库：<span class="highlight">【请在这里填写你的 GitHub 仓库链接】</span></p>
+
+            <h3>🙏 致谢</h3>
+            <p>感谢以下开源项目提供的支持：</p>
+            <ul>
+                <li>Flask — Python Web 框架</li>
+                <li>Socket.IO — 实时通信库</li>
+                <li>QRCode.js — 二维码生成</li>
+                <li>Google STUN — WebRTC 网络穿透</li>
+            </ul>
+
+            <div class="about-footer">
+                <p>Made with ❤️ by <span class="highlight">【你的名字】</span></p>
+                <p>© 2026 跨设备实用工具箱. All rights reserved.</p>
+            </div>
+
+            <a href="/" class="btn btn-primary btn-back">← 返回首页</a>
+        </div>
+    </div>
+</body>
+</html>

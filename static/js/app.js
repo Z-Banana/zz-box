@@ -1,5 +1,13 @@
 // ==================== 全局状态 ====================
-const socket = io();
+const socket = io({
+    transports: ['polling'],
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    randomizationFactor: 0.5,
+    timeout: 20000
+});
 let deviceId = localStorage.getItem('device_id') || generateId();
 let nickname = localStorage.getItem('nickname') || '我的设备';
 let currentRooms = {};
@@ -26,9 +34,26 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('已连接服务器', 'success');
         updateConnStatus(true);
         socket.emit('register', {device_id: deviceId, nickname: nickname});
+        // 重连后自动重新加入房间
+        for (const [type, code] of Object.entries(currentRooms)) {
+            if (code) socket.emit('join_room_socket', {room_code: code});
+        }
     });
 
-    socket.on('disconnect', () => updateConnStatus(false));
+    socket.on('disconnect', (reason) => {
+        updateConnStatus(false);
+        console.log('[SOCKET] 断开原因:', reason);
+    });
+    socket.on('reconnect', (attemptNumber) => {
+        showToast('已重新连接', 'success');
+        updateConnStatus(true);
+    });
+    socket.on('reconnect_attempt', (attemptNumber) => {
+        console.log('[SOCKET] 重连尝试 #' + attemptNumber);
+    });
+    socket.on('reconnect_error', (error) => {
+        console.log('[SOCKET] 重连失败:', error);
+    });
     socket.on('registered', (data) => {
         document.getElementById('onlineCount').textContent = data.online_count;
     });
@@ -107,11 +132,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    setInterval(() => { socket.emit('heartbeat', {device_id: deviceId}); }, 15000);
+    setInterval(() => { if (socket.connected) socket.emit('heartbeat', {device_id: deviceId}); }, 8000);
     fetchDevices();
-    setInterval(fetchDevices, 15000);
+    setInterval(fetchDevices, 10000);
     loadRelayInbox();
-    setInterval(loadRelayInbox, 15000);
+    setInterval(loadRelayInbox, 10000);
 
     handleUrlParams();
 });
@@ -226,7 +251,7 @@ function handleUrlParams() {
                 // 自动显示加入输入框
                 const joinMap = {
                     transfer: 'transfer', share: 'share', clipboard: 'clipboard',
-                    clock: 'clock', bill: 'bill', dice: 'dice',
+                    bill: 'bill', dice: 'dice',
                     vote: 'vote', roulette: 'roulette', random: 'random'
                 };
                 if (joinMap[tab]) showJoinInput(joinMap[tab]);
